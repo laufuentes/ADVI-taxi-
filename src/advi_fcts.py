@@ -6,6 +6,8 @@ import numpy as np
 import seaborn as sns
 import tensorflow as tf
 import tensorflow_probability as tfp
+from tensorflow.python.ops.parallel_for.gradients import jacobian
+
 tfd = tfp.distributions
 
 
@@ -37,8 +39,8 @@ class Model:
 
         z_flat = theta[:z_size]
         w_flat = theta[z_size:z_size + w_size]
-        sigma = theta[z_size + w_size]
-        alpha = theta[z_size + w_size + 1:]
+        sigma = tf.exp(theta[z_size + w_size])
+        alpha = tf.exp(theta[z_size + w_size + 1:])
 
         # Reshape z and w
         z = tf.reshape(z_flat, [self.latent_dim,self.num_datapoints])
@@ -51,7 +53,7 @@ class Model:
         self.log_lik = tfd.Normal(loc=tf.matmul(w,z), scale=sigma*tf.ones([self.data_dim, self.num_datapoints]))
         w_log_prior = self.w.log_prob(w)
         z_log_prior = self.z.log_prob(z)
-        sigma_log_prior = self.w.log_prob(sigma) 
+        sigma_log_prior = self.sigma.log_prob(sigma) 
         log_lik = self.log_lik.log_prob(self.x)
         return  tf.reduce_sum(log_lik) + tf.reduce_sum(w_log_prior) + tf.reduce_sum(z_log_prior) + tf.reduce_sum(sigma_log_prior)
     
@@ -61,6 +63,26 @@ class ADVI_algorithm(Model):
         self.nb_samples = nb_samples 
         self.lr = lr 
     
+    def Tinv(self, theta):
+        n =  self.latent_dim* self.num_datapoints+self.data_dim*self.latent_dim
+        first_part = theta[:n]
+        last_n_elements = theta[:-n]
+        last_n_elements = tf.exp(last_n_elements)
+        transformed_tensor = tf.concat([first_part, last_n_elements], axis=0)
+        # Initialize the Jacobian matrix
+        mat_id = tf.eye(theta.shape[0])  # Initialize the Jacobian matrix as an identity matrix
+        d = tf.concat(( tf.ones((n, 1)),tf.exp(theta[n:])), axis=0)
+        jac = d*mat_id
+        det = tf.math.log(tf.abs(tf.linalg.det(jac)))
+        return transformed_tensor, jac, det
+    
+    def gradient_Tinv(self, zeta):
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(zeta)
+            Tinv_value,_,log_jac_Tinv = self.Tinv(zeta)
+            grad_Tinv = tape.gradient(Tinv_value, zeta)
+            grad_log_jac_Tinv = tape.gradient(log_jac_Tinv, zeta)
+        return grad_Tinv, grad_log_jac_Tinv
 
     def gradient_log_joint(self, theta):
         with tf.GradientTape() as tape:
@@ -76,14 +98,15 @@ class ADVI_algorithm(Model):
         for m in range(nb_samples):
             eta = tf.random.normal(shape=(self.dim,1))
             theta = tf.linalg.diag(tf.exp(tf.reshape(omega, [-1])))@eta + mu 
-            grad_log_joint_eval = self.gradient_log_joint(theta)
-            nabla_mu = nabla_mu + grad_log_joint_eval 
-            nabla_omega = nabla_omega + grad_log_joint_eval + tf.linalg.diag(tf.exp(tf.reshape(omega, [-1])))@eta + 1
+            grad_log_joint = self.gradient_log_joint(theta)
+            grad_Tinv, grad_log_jac_Tinv = self.gradient_Tinv(theta)
+            nabla_mu = nabla_mu + grad_log_joint * grad_Tinv + grad_log_jac_Tinv 
+            nabla_omega = nabla_omega + (grad_log_joint * grad_Tinv + grad_log_jac_Tinv)*tf.linalg.diag(tf.exp(tf.reshape(omega, [-1])))@eta  + 1
         return nabla_mu/ nb_samples, nabla_omega/nb_samples
 
-    def step_size(i, lr, s, grad, tau=1, alpha=0.1): 
+    def step_size(self, i_value, lr, s, grad, tau=1, alpha=0.1): 
         s = alpha * grad**2 + (1 - alpha) * s
-        rho = lr * (i ** (-0.5 + 1e-16)) / (tau + tf.sqrt(s))
+        rho = lr * (i_value ** (-0.5 + 1e-16)) / (tau + tf.sqrt(s))
         return rho, s
 
     def elbo_computation(self, nb_samples): 
@@ -116,15 +139,16 @@ class ADVI_algorithm(Model):
             rho_omega, s_omega = self.step_size(i, self.lr, s_omega, nabla_omega)
 
             # Update mu and w 
-            mu = mu + rho_mu*nabla_mu
-            omega = omega + rho_omega* nabla_omega
+            mu = mu + nabla_mu@tf.linalg.diag(rho_mu)
+            omega = omega + nabla_omega@tf.linalg.diag(rho_omega)
 
             elbo_new = self.elbo_computation(self.nb_samples)
             elbo_evol.append(elbo_new)
             change_in_ELBO = tf.abs(elbo_ - elbo_new)
+            print(i, change_in_ELBO.numpy())
             elbo_ =  elbo_new
             # increment iteration counter
             i +=1
-            if abs(change_in_ELBO) < thr:
+            if change_in_ELBO.numpy() < thr or i > 1e10 or elbo_.numpy()==np.nan:
                 condition = False 
         return mu.numpy(), omega.numpy()
