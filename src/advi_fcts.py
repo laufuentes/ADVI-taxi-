@@ -22,14 +22,14 @@ class Model:
         
         """Parameter initialisation"""
 
-        self.dim = data_dim*latent_dim + latent_dim*num_datapoints + 1 + latent_dim
+        self.dim = data_dim*latent_dim + latent_dim*num_datapoints + 1 #+ latent_dim
         self.data_dim = data_dim
         self.latent_dim = latent_dim
         self.num_datapoints = num_datapoints
         self.x = dataset
         
         # Priors 
-        self.alpha = tfd.InverseGamma(concentration=1.0, scale=tf.ones(latent_dim), name="alpha_prior")
+        #self.alpha = tfd.InverseGamma(concentration=1.0, scale=tf.ones(latent_dim), name="alpha_prior")
         self.sigma = tfd.LogNormal(loc=0.0,scale=1.0, name="sigma_prior")
         self.z =  tfd.Normal(loc=tf.zeros([latent_dim, num_datapoints]), scale=tf.ones([latent_dim, num_datapoints]), name="z_prior")
 
@@ -51,12 +51,13 @@ class Model:
         z_flat = theta[:z_size]
         w_flat = theta[z_size:z_size + w_size]
         sigma = theta[z_size + w_size]
-        alpha = theta[z_size + w_size + 1:]
+        #alpha = theta[z_size + w_size + 1:]
 
         # Reshape z and w
         z = tf.reshape(z_flat, [self.latent_dim,self.num_datapoints])
         w = tf.reshape(w_flat, [self.data_dim, self.latent_dim])
-        return sigma, alpha, z, w
+        # alpha
+        return sigma, z, w
     
     def log_joint(self, theta):
         """Compute log-joint probability of z, w, alpha, sigma, data according to the precised model 
@@ -67,8 +68,10 @@ class Model:
         Returns:
             Value (tf.Tensor): tf.reduce_sum(log_lik) + tf.reduce_sum(w_log_prior) + tf.reduce_sum(z_log_prior) + tf.reduce_sum(sigma_log_prior)
         """
-        sigma, alpha, z, w = self.params(theta)
-        self.w = tfd.Normal(loc=tf.zeros([self.data_dim, self.latent_dim]), scale=sigma * alpha *tf.ones([self.data_dim, self.latent_dim]), name="w_prior")
+        sigma, z, w = self.params(theta) #alpha
+        #alpha = self.alpha.sample()
+        # alpha
+        self.w = tfd.Normal(loc=tf.zeros([self.data_dim, self.latent_dim]), scale=sigma  *tf.ones([self.data_dim, self.latent_dim]), name="w_prior")
         self.log_lik = tfd.Normal(loc=tf.matmul(w,z), scale=sigma*tf.ones([self.data_dim, self.num_datapoints]))
         w_log_prior = self.w.log_prob(w)
         z_log_prior = self.z.log_prob(z)
@@ -84,7 +87,6 @@ class ADVI_algorithm(Model):
         super().__init__(data_dim, latent_dim, num_datapoints, dataset)
 
         """ Parameter initialization"""
-
         self.nb_samples = nb_samples 
         self.lr = lr 
 
@@ -170,7 +172,7 @@ class ADVI_algorithm(Model):
         nabla_mu = tf.zeros((self.dim,1))
         nabla_omega = tf.zeros((self.dim,1))
         elbo = 0
-        for m in range(nb_samples):
+        for _ in range(nb_samples):
             eta = tf.random.normal(shape=(self.dim,1))
             par = tf.linalg.diag(tf.exp(tf.reshape(self.omega, [-1])))@eta + self.mu 
             theta = self.T_inv(par)
@@ -179,9 +181,8 @@ class ADVI_algorithm(Model):
             grad_Tinv, grad_log_jac_Tinv = self.gradient_Tinv(par)
             nabla_mu = nabla_mu + grad_log_joint * grad_Tinv + grad_log_jac_Tinv 
             nabla_omega = nabla_omega + (grad_log_joint * grad_Tinv + grad_log_jac_Tinv)*tf.linalg.diag(tf.exp(tf.reshape(self.omega, [-1])))@eta  + 1
-
-            elbo = elbo + tf.reduce_sum(grad_log_joint) + tf.reduce_sum(self.Tinv_jac(par))
-            entropy = tf.reduce_sum(self.omega)
+            elbo = elbo + self.log_joint(theta) + self.Tinv_jac(par)
+        entropy = tf.reduce_sum(self.omega)
         return nabla_mu/ nb_samples, nabla_omega/nb_samples, elbo/ nb_samples + entropy
 
     def step_size(self, i_value, lr, s, grad, tau=1, alpha=0.1): 
@@ -215,8 +216,8 @@ class ADVI_algorithm(Model):
         self.omega = tf.zeros((self.dim, 1)) # Mean-field   
 
         self.elbo_evol = []
-        thr =  10
-        _, _,elbo_ = self.fct_obj(self.nb_samples)
+        thr =  1
+        elbo_ = tf.zeros(())
         condition = True
 
         while condition: 
@@ -240,6 +241,6 @@ class ADVI_algorithm(Model):
                 print(i, change_in_ELBO.numpy())
             # increment iteration counter
             i +=1
-            if ((np.abs(change_in_ELBO.numpy()) < thr) or (i > 5*1e2) or (np.isnan(elbo_.numpy())) ):
+            if ((np.abs(change_in_ELBO.numpy()) < thr) or (i > 9*1e2) or (np.isnan(elbo_.numpy())) ):
                 condition = False 
         return self.mu.numpy(), self.omega.numpy()
