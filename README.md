@@ -18,7 +18,7 @@ We have provided a comprehensive report summarizing the key concepts and methodo
 
 Our focus lies on the taxi routes experiment proposed in the paper. By leveraging ADVI, we aim to accelerate variational inference for dimension reduction in this context. This experiment serves as a practical application to showcase the effectiveness and efficiency of the ADVI algorithm. Such experiment over the taxis dataset could be divided into 3 consecutive steps: 
 
-$\underline{\text{Step }1: }$ Interpolation
+$\underline{\text{Step 1: }}$ Interpolation
 
 This step involves normalizing taxi trajectories' length into a 50-coordinate space (x, y), corresponding to an average trip length of 13 minutes. This technique mitigates bias introduced by trajectory length during dimension reduction and clustering. The interpolated trajectories are then saved in "df/interpolation", enabling us to proceed to further steps without repeating this process.
 
@@ -26,7 +26,7 @@ To run this step refer to:
 > 1-Interpolation.ipynb
 
 
-$\underline{\text{Step }2: }$ Dimension reduction
+$\underline{\text{Step 2: }}$ Dimension reduction
 
 In this step, we perform dimension reduction of the interpolated trajectories using Probabilistic PCA (PPCA). PPCA considers the model $x \sim wz + \text{noise}$ and defines prior distributions over $z$, $w$, and $\text{noise}$ ($p(\theta)$), along with the joint distribution $p(x,\theta)$. We've implemented and deployed the ADVI algorithm to find the parameters of the variational distribution $q(\mu, \omega)$ approximating $p(\theta | x)$, enabling the projection of $x$ into a lower dimension $z$.
 
@@ -36,7 +36,7 @@ To run the second step of the algorithm refer to:
 *Remark: The algorithm may take several hours to converge. We've saved our results from this step in "df/results" for continued use in the subsequent steps.*
 
 
-$\underline{\text{Step }3: }$ Cluster trajectories**
+$\underline{\text{Step 3: }}$ Cluster trajectories**
 
 The final step involves clustering the trajectories in the lower dimension. To perform this step, we utilized an existing version of Bayesian Gaussian Mixture Model (BGMM) from sklearn. The final images displaying clustering trajectories and ELBO evolution over iterations are saved in "images/". 
 
