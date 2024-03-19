@@ -53,7 +53,7 @@ def interpolation(ls, num_points):
         f_y = sc.interpolate.interp1d(np.linspace(0, 1, len(y)), y, kind='linear')
         
         # Interpolate y values
-        t = np.linspace(0, 1, 50)
+        t = np.linspace(0, 1, num_points)
         interpolated_x = f_x(t)
         interpolated_y = f_y(t)
 
@@ -72,10 +72,11 @@ def new_df(trips, nb_points, mask, newlist):
         newlist (list): interpolated trajectories 
 
     """
+    N = len(newlist) 
     ids = trips.iloc[0:nb_points][mask]["TRIP_ID"].to_numpy()
     new_list = np.array(newlist)
     new_df = []
-    for i in range(len(newlist)): 
+    for i in range(N): 
         new_df.append(str(new_list[i].tolist()))
-    pd.DataFrame(np.array(new_df), index=ids, columns={'POLYLINE'}).to_csv('../taxi+service+trajectory+prediction+challenge+ecml+pkdd+2015/interpolation'+str(nb_points)+'.csv')
+    pd.DataFrame(np.array(new_df), index=ids, columns=np.array(['POLYLINE'])).to_csv('df/interpolation/interpolation_'+str(N)+'.csv')
     return print('ok')
