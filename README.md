@@ -34,6 +34,7 @@ In this step, we perform dimension reduction of the interpolated trajectories us
 
 To run the second step of the algorithm refer to:
 > 2-PPCA_ADVI.ipynb
+
 *Remark: The algorithm may take several hours to converge. We've saved our results from this step in "df/results" for continued use in the subsequent steps.*
 
 
@@ -65,4 +66,5 @@ conda install ipykernel=6.29.3 ipython=8.22.1 keras=2.15.0 matplotlib=3.8.3 nump
 References
 
 [1] Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, and David M.Blei. 2016.Automatic Differentiation Variational Inference.
+
 [2] Luis Moreira-Matias, Michel Ferreira, Joao Mendes-Moreira, L. L., J. J. . URL [http://CRAN.R-project.org/package=ipred, r package version 0.9-1](https://archive.ics.uci.edu/dataset/339/taxi+service+trajectory+prediction+challenge+ecml+pkdd+2015)
