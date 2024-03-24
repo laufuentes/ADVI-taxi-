@@ -1,4 +1,4 @@
-# Variational Bayes: Experiment in Taxi Routes in Lisbon
+# Variational Bayes: Experiment in Taxi Routes in Porto
 
 ## Project: Graphical Models and Discrete Inference Learning, M2 Mathematics and Artificial Intelligence, Paris-Saclay University
 
